@@ -27,6 +27,8 @@ import xml.etree.ElementTree as ET
 import io
 import os
 import argparse
+from pathlib import Path
+import geoid
 
 class alp2gpx(object):
     inputfile, outputfile = None, None
@@ -94,13 +96,19 @@ class alp2gpx(object):
         return unpack('>Q', result)[0]
     
     
-    def _get_height(self):
-        result = self._get_int()
-        if result ==  -999999999:
+    def _get_height(self, lat, lon):
+        hwgs84 = self._get_int()
+        if hwgs84 ==  -999999999:
             return None
         else:
-            result *= 1e-3
-        return result
+            hwgs84 *= 1e-3
+            base_path = Path(__file__).parent
+            egm96_path = (base_path / 'egm96-5.pgm').resolve()
+            egm96 = geoid.GeoidHeight(egm96_path)
+            hdif = egm96.get(lat,lon)
+            hegm96 = round(hwgs84 - hdif,2)
+            # print 'Alt:', lat, lon, hdif, hwgs84, hegm96
+        return hegm96
     
     def _get_accuracy(self):
         return self._get_int()
@@ -136,7 +144,7 @@ class alp2gpx(object):
         lon = self._get_coordinate()
         lat = self._get_coordinate()
         if segmentVersion <= 3: 
-            alt = self._get_height()
+            alt = self._get_height(lat, lon)
             ts = self._get_timestamp()
             
             acc,bar = None, None
@@ -154,7 +162,7 @@ class alp2gpx(object):
                 name = self._get_string(1)
                 if name == "e":
                     # elevation
-                    alt = self._get_height()
+                    alt = self._get_height(lat, lon)
                     size = size - 5
                     # print("Altitude" , alt)
                     continue
